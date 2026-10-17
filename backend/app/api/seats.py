@@ -10,6 +10,7 @@ from app.services.seat_lock_service import (
     release_seat,
     purchase_seat,
 )
+from app.websocket.manager import manager
 
 router = APIRouter(
     prefix="/seats",
@@ -22,37 +23,66 @@ def get_seats(db: Session = Depends(get_db)):
     return db.query(Seat).all()
 
 @router.post("/{seat_id}/lock")
-def lock_seat_endpoint(
+async def lock_seat_endpoint(
     seat_id: int,
     request: SeatLockRequest,
     db: Session = Depends(get_db),
 ):
-    return lock_seat(
+    result = lock_seat(
         db=db,
         seat_id=seat_id,
         session_id=request.session_id,
     )
+
+    await manager.broadcast(
+        {
+            "seat_id": seat_id,
+            "status": "LOCKED",
+        }
+    )
+
+    return result
+
 
 @router.delete("/{seat_id}/lock")
-def release_seat_endpoint(
+async def release_seat_endpoint(
     seat_id: int,
     request: SeatLockRequest,
     db: Session = Depends(get_db),
 ):
-    return release_seat(
+    result = release_seat(
         db=db,
         seat_id=seat_id,
         session_id=request.session_id,
     )
 
+    await manager.broadcast(
+        {
+            "seat_id": seat_id,
+            "status": "AVAILABLE",
+        }
+    )
+
+    return result
+
+
 @router.post("/{seat_id}/purchase")
-def purchase_seat_endpoint(
+async def purchase_seat_endpoint(
     seat_id: int,
     request: SeatLockRequest,
     db: Session = Depends(get_db),
 ):
-    return purchase_seat(
+    result = purchase_seat(
         db=db,
         seat_id=seat_id,
         session_id=request.session_id,
     )
+
+    await manager.broadcast(
+        {
+            "seat_id": seat_id,
+            "status": "SOLD",
+        }
+    )
+
+    return result

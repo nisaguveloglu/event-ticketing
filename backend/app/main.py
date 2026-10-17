@@ -1,10 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from sqlalchemy import text
 
 from app.api.seats import router as seats_router
 from app.core.database import Base, engine
 from app.models import Hall, Seat, SeatLock
-
+from app.websocket.manager import manager
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,3 +24,15 @@ def db_test():
         connection.execute(text("SELECT 1"))
 
     return {"database": "connected"}
+
+
+@app.websocket("/ws/seats")
+async def seat_websocket(websocket: WebSocket):
+    await manager.connect(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)

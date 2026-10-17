@@ -3,7 +3,7 @@ from sqlalchemy import text
 
 from app.api.seats import router as seats_router
 from app.core.database import Base, engine
-from app.models import Hall, Seat
+from app.models import Hall, Seat, SeatLock
 
 
 Base.metadata.create_all(bind=engine)

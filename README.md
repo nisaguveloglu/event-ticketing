@@ -2,6 +2,7 @@
 
 Projenin genel dizin yapısı aşağıdaki şekilde tutulmalıdır:
 
+```text
 event-ticketing/
 │
 ├── frontend/
@@ -15,6 +16,7 @@ event-ticketing/
 ├── docker-compose.yml
 ├── .gitignore
 └── README.md
+```
 
 Her ekip üyesi kendi alanında çalışırken bu ana yapıyı bozmamalıdır.
 
@@ -24,8 +26,11 @@ Yeni ana klasörler eklenmeden önce ekip içinde konuşulmalıdır.
 
 # Frontend Structure
 
+Frontend tarafı Ahmet tarafından geliştirilecektir.
+
 Önerilen yapı:
 
+```text
 frontend/
 │
 ├── src/
@@ -53,9 +58,11 @@ frontend/
 ├── public/
 │
 └── package.json
+```
 
 Frontend tarafında mümkün olduğunca şu sorumluluk ayrımı korunmalıdır:
 
+```text
 components/
 → tekrar kullanılabilir UI parçaları
 
@@ -70,19 +77,28 @@ websocket/
 
 utils/
 → yardımcı fonksiyonlar
+```
 
 Önemli:
 
 WebSocket kodu doğrudan SeatMap component içine gömülmemelidir.
 
 Örneğin:
+
+```text
 frontend/src/websocket/seatSocket.js
+```
+
 gibi ayrı bir dosyada tutulmalıdır.
 
 Aynı şekilde backend API çağrıları da component içinde doğrudan yazılmamalıdır.
 
 Örneğin:
+
+```text
 frontend/src/services/seatApi.js
+```
+
 kullanılmalıdır.
 
 ---
@@ -93,6 +109,7 @@ Backend tarafı modüler FastAPI yapısı ile geliştirilmektedir.
 
 Mevcut yapı:
 
+```text
 backend/
 │
 ├── app/
@@ -128,6 +145,7 @@ backend/
 │
 ├── .env
 └── venv/
+```
 
 Bu yapı korunmalıdır.
 
@@ -141,35 +159,44 @@ HTTP endpoint'leri burada bulunur.
 
 Örnek:
 
+```text
 app/api/seats.py
+```
 
 Bu katmanın görevi:
 
+```text
 Request almak
 ↓
 Service çağırmak
 ↓
 Response döndürmek
-
+```
 
 Business logic mümkün olduğunca burada yazılmamalıdır.
 
 Yanlış yaklaşım:
 
+```text
 API dosyasında:
 - database query
 - lock logic
 - purchase logic
 - WebSocket logic
 - bütün kontroller
+```
 
 Doğru yaklaşım:
 
+```text
 API
 ↓
 Service
 ↓
 Database
+```
+
+---
 
 ## app/services/
 
@@ -177,21 +204,27 @@ Business logic burada bulunur.
 
 Mevcut örnek:
 
+```text
 app/services/seat_lock_service.py
+```
 
 Şu anda burada:
 
+```text
 lock_seat()
 release_seat()
 purchase_seat()
+```
 
 işlemleri bulunmaktadır.
 
 İleride örneğin:
 
+```text
 ticket_service.py
 reservation_service.py
 recommendation_service.py
+```
 
 gibi servisler eklenebilir.
 
@@ -203,14 +236,20 @@ SQLAlchemy database modelleri burada bulunur.
 
 Mevcut modeller:
 
+```text
 hall.py
 seat.py
 seat_lock.py
+```
 
 Örneğin:
+
+```text
 Hall
 Seat
 SeatLock
+```
+
 Bu klasör yalnızca database modellerini temsil etmelidir.
 
 ---
@@ -222,12 +261,18 @@ FastAPI request ve response modelleri burada bulunur.
 Pydantic kullanılmaktadır.
 
 Mevcut örnekler:
+
+```text
 seat.py
 seat_lock.py
+```
 
 Örneğin:
+
+```text
 SeatResponse
 SeatLockRequest
+```
 
 Frontend'e dönen veya frontend'den gelen veri formatları burada tanımlanmalıdır.
 
@@ -239,11 +284,14 @@ Database erişimini ilerleyen aşamalarda service katmanından ayırmak için ku
 
 Örneğin:
 
+```text
 seat_repository.py
 ticket_repository.py
+```
 
 İdeal akış:
 
+```text
 API
 ↓
 Service
@@ -251,6 +299,7 @@ Service
 Repository
 ↓
 Database
+```
 
 Şu an bazı sorgular service içinde bulunmaktadır.
 
@@ -263,13 +312,19 @@ Proje büyüdükçe repository katmanına taşınabilir.
 WebSocket connection management burada bulunur.
 
 Mevcut dosya:
+
+```text
 manager.py
+```
 
 Görevi:
+
+```text
 WebSocket client bağlanması
 WebSocket client çıkarılması
 Connected client listesinin tutulması
 Broadcast yapılması
+```
 
 WebSocket bağlantı yönetimi başka dosyalara dağıtılmamalıdır.
 
@@ -280,19 +335,26 @@ WebSocket bağlantı yönetimi başka dosyalara dağıtılmamalıdır.
 Backend genel yapılandırması burada bulunur.
 
 Mevcut dosyalar:
+
+```text
 config.py
 database.py
+```
 
 `config.py`
 
+```text
 environment configuration
+```
 
 `database.py`
 
+```text
 SQLAlchemy engine
 SessionLocal
 Base
 get_db()
+```
 
 gibi ortak database altyapısını içerir.
 
@@ -306,16 +368,20 @@ Burada yalnızca uygulamanın genel kurulumu tutulmalıdır.
 
 Örneğin:
 
+```text
 FastAPI app creation
 Router registration
 WebSocket endpoint registration
 Startup configuration
+```
 
 Business logic buraya eklenmemelidir.
 
 Amaç:
 
+```text
 main.py küçük kalmalı
+```
 
 ---
 
@@ -325,6 +391,7 @@ Database tarafı ayrı bir klasör altında tutulmalıdır.
 
 Önerilen yapı:
 
+```text
 database/
 │
 ├── migrations/
@@ -334,6 +401,7 @@ database/
 ├── schema/
 │
 └── diagrams/
+```
 
 ---
 
@@ -343,10 +411,12 @@ Database değişiklikleri burada tutulmalıdır.
 
 Örneğin:
 
+```text
 001_create_halls.sql
 002_create_seats.sql
 003_create_seat_locks.sql
 004_create_tickets.sql
+```
 
 İleride Alembic gibi migration sistemi kullanılabilir.
 
@@ -358,11 +428,14 @@ Test veya development için başlangıç verileri burada tutulmalıdır.
 
 Örneğin:
 
+```text
 hall_seed.sql
 seat_seed.sql
+```
 
 Örnek kullanım:
 
+```text
 Main Hall
 A1
 A2
@@ -372,6 +445,7 @@ B1
 B2
 B3
 B4
+```
 
 ---
 
@@ -381,7 +455,9 @@ Database yapısını açıklayan dosyalar burada bulunabilir.
 
 Örneğin:
 
+```text
 current_schema.sql
+```
 
 ---
 
@@ -391,7 +467,9 @@ ER diagram gibi database görselleri burada tutulabilir.
 
 Örneğin:
 
+```text
 er-diagram.png
+```
 
 ---
 
@@ -399,17 +477,21 @@ er-diagram.png
 
 Şu anda temel modeller şunlardır:
 
+```text
 Hall
 Seat
 SeatLock
+```
 
 İlişki:
 
+```text
 Hall
  │
  └── Seat
       │
       └── SeatLock
+```
 
 ---
 
@@ -419,8 +501,10 @@ Hall bir salonu temsil eder.
 
 Alanlar:
 
+```text
 id
 name
+```
 
 ---
 
@@ -430,17 +514,21 @@ Seat bir koltuğu temsil eder.
 
 Alanlar:
 
+```text
 id
 hall_id
 row
 number
 status
+```
 
 Seat status:
 
+```text
 AVAILABLE
 LOCKED
 SOLD
+```
 
 ---
 
@@ -450,16 +538,20 @@ Bir koltuğun hangi session tarafından lock edildiğini tutar.
 
 Alanlar:
 
+```text
 id
 seat_id
 session_id
 created_at
+```
 
 `seat_id` unique tutulmaktadır.
 
 Amaç:
 
+```text
 Aynı seat için aynı anda birden fazla lock kaydı oluşmasını engellemek.
+```
 
 ---
 
@@ -467,6 +559,7 @@ Aynı seat için aynı anda birden fazla lock kaydı oluşmasını engellemek.
 
 Şu anda backend tarafında çalışan temel akış:
 
+```text
 Frontend
    ↓
 REST API
@@ -476,9 +569,11 @@ Backend
 Seat Service
    ↓
 PostgreSQL
+```
 
 Seat lock sonrasında:
 
+```text
 Frontend
    ↓
 POST /seats/{id}/lock
@@ -492,6 +587,7 @@ Database Update
 WebSocket Broadcast
    ↓
 Connected Clients
+```
 
 ---
 
@@ -499,27 +595,33 @@ Connected Clients
 
 Temel seat state geçişleri:
 
+```text
 AVAILABLE
     ↓
    LOCK
     ↓
  LOCKED
+```
 
 Kullanıcı seçimden vazgeçerse:
 
+```text
 LOCKED
     ↓
  RELEASE
     ↓
 AVAILABLE
+```
 
 Satın alma tamamlanırsa:
 
+```text
 LOCKED
     ↓
  PURCHASE
     ↓
   SOLD
+```
 
 ---
 
@@ -527,7 +629,9 @@ LOCKED
 
 ## Get Seats
 
+```text
 GET /seats/
+```
 
 Frontend seat map'i oluştururken bu endpoint kullanılabilir.
 
@@ -549,7 +653,9 @@ Response örneği:
 
 ## Lock Seat
 
+```text
 POST /seats/{seat_id}/lock
+```
 
 Request:
 
@@ -561,13 +667,17 @@ Request:
 
 Başarılı durumda:
 
+```text
 Seat → LOCKED
+```
 
 ---
 
 ## Release Seat
 
+```text
 DELETE /seats/{seat_id}/lock
+```
 
 Request:
 
@@ -579,13 +689,17 @@ Request:
 
 Başarılı durumda:
 
+```text
 Seat → AVAILABLE
+```
 
 ---
 
 ## Purchase Seat
 
+```text
 POST /seats/{seat_id}/purchase
+```
 
 Request:
 

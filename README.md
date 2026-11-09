@@ -1079,3 +1079,10 @@ Docs
 ```
 
 Bu yapı proje boyunca mümkün olduğunca korunmalıdır.
+
+---
+
+# Backend Kurulum ve Çalıştırma Rehberi
+
+Backend servisinin yerel kurulum, veritabanı hazırlama, idempotent seed ve izole test çalıştırma adımları için bkz.: [backend/README.md](backend/README.md).
+

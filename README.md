@@ -1012,6 +1012,27 @@ Tamamlanan çalışmalar Pull Request ile birleştirilmelidir.
 
 ---
 
+# Current Completed Frontend Work
+
+Frontend implementation is located under `frontend/` and currently includes:
+
+```text
+✓ React and Vite project foundation
+✓ Responsive seat map
+✓ AVAILABLE / SELECTED / LOCKED / SOLD states
+✓ Browser session identity
+✓ Seat lock and release requests
+✓ Purchase request
+✓ Ticket detail and QR display
+✓ WebSocket client with automatic reconnect
+✓ Development proxy for REST and WebSocket
+✓ Component tests and production build
+```
+
+Local frontend instructions are available in [`frontend/README.md`](frontend/README.md). The frontend integration contract and team checklist are documented in [`docs/architecture/frontend.md`](docs/architecture/frontend.md).
+
+---
+
 # Important Integration Point
 
 Frontend, backend ve database birbirinden bağımsız projeler gibi geliştirilmemelidir.

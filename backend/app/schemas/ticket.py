@@ -9,6 +9,7 @@ class TicketResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    order_id: int | None = None
     ticket_code: str
     event_id: int
     event_name: str
@@ -18,5 +19,10 @@ class TicketResponse(BaseModel):
     seat_id: int
     seat_row: str
     seat_number: int
+    seat_label: str = ""
+    category_name: str | None = None
+    unit_price_kurus: int = 0
+    status: str = "VALID"
+    used_at: datetime | None = None
     seat_status: SeatStatus
     created_at: datetime

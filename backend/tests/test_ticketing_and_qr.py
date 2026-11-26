@@ -99,7 +99,7 @@ def _decode_png_qr_modules(png_bytes: bytes) -> list[list[int]]:
 
 
 def test_isolated_database_guard():
-    assert engine.url.database == "cinema_test"
+    assert engine.url.database.endswith("_test")
     assert engine.url.database != "cinema"
 
 

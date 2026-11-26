@@ -1,59 +1,150 @@
-# Event Ticketing ve Koltuk Seçimi — ER Diyagramı
+# Event Ticketing ve Koltuk Seçimi — Birinci Aşama (S1) ER Diyagramı
 
-Aşağıdaki Mermaid ER diyagramı projenin tek salon ve tek etkinlik prototipindeki beş ana tabloyu (`halls`, `seats`, `seat_locks`, `events`, `tickets`), birincil/yabancı anahtarları ve tekillik kısıtlarını/indekslerini göstermektedir.
+Aşağıdaki Mermaid ER diyagramı projenin Birinci Aşama (S1) veri modelini, fiziksel koltuk (`SEATS`) ile etkinlik bazlı doluluk (`EVENT_SEATS`) ayrımını, süreli rezervasyon (`RESERVATIONS`), sipariş (`ORDERS`), bilet (`TICKETS`), tek kullanımlık QR giriş (`CHECK_INS`), e-posta teslim kuyruğu (`EMAIL_DELIVERIES`) ve tekrar istek korumasını (`IDEMPOTENCY_RECORDS`) göstermektedir.
 
 ```mermaid
 erDiagram
+    HALLS ||--o{ SEAT_SEGMENTS : divides
     HALLS ||--o{ SEATS : contains
+    SEAT_SEGMENTS ||--o{ SEATS : groups
     HALLS ||--o{ EVENTS : hosts
-    SEATS ||--o| SEAT_LOCKS : locked_by
-    EVENTS ||--o{ TICKETS : issues
-    SEATS ||--o{ TICKETS : sold_as
+    EVENTS ||--o{ TICKET_CATEGORIES : defines
+    EVENTS ||--o{ EVENT_SEATS : tracks
+    SEATS ||--o{ EVENT_SEATS : mapped_to
+    TICKET_CATEGORIES ||--o{ EVENT_SEATS : prices
+    GUEST_SESSIONS ||--o{ RESERVATIONS : holds
+    EVENTS ||--o{ RESERVATIONS : reserves_for
+    RESERVATIONS ||--o{ RESERVATION_ITEMS : includes
+    EVENT_SEATS ||--o{ RESERVATION_ITEMS : reserved_in
+    RESERVATIONS |o--o{ EVENT_SEATS : current_lock
+    GUEST_SESSIONS ||--o{ ORDERS : places
+    RESERVATIONS ||--|| ORDERS : fulfilled_by
+    ORDERS ||--|{ TICKETS : issues
+    EVENTS ||--o{ TICKETS : for_event
+    SEATS ||--o{ TICKETS : for_seat
+    TICKETS ||--o| CHECK_INS : checked_in_by
+    ORDERS ||--o{ EMAIL_DELIVERIES : delivers
+    ORDERS ||--o{ IDEMPOTENCY_RECORDS : deduplicates
 
     HALLS {
         int id PK
         varchar name "NOT NULL"
+        int stage_x "NOT NULL"
+        int stage_y "NOT NULL"
+    }
+
+    SEAT_SEGMENTS {
+        int id PK
+        int hall_id FK "NOT NULL -> halls.id"
+        varchar row_label "NOT NULL"
+        boolean orphan_exempt "NOT NULL"
     }
 
     SEATS {
         int id PK
         int hall_id FK "NOT NULL -> halls.id"
-        varchar row "NOT NULL"
+        varchar row_label "NOT NULL"
         int number "NOT NULL"
-        seatstatus status "NOT NULL (ORM default: AVAILABLE)"
-    }
-
-    SEAT_LOCKS {
-        int id PK
-        int seat_id FK "UNIQUE, NOT NULL -> seats.id"
-        varchar session_id "NOT NULL"
-        timestamp created_at "NOT NULL"
+        int row_order "NOT NULL"
+        int segment_id FK "NOT NULL -> seat_segments.id"
+        int x "NOT NULL"
+        int y "NOT NULL"
+        boolean is_accessible "NOT NULL"
     }
 
     EVENTS {
         int id PK
         int hall_id FK "NOT NULL -> halls.id"
         varchar name "NOT NULL"
-        timestamptz starts_at "NOT NULL (roadmap: date)"
+        timestamptz starts_at "NOT NULL"
+        boolean sales_open "NOT NULL"
+        int version "NOT NULL"
+    }
+
+    TICKET_CATEGORIES {
+        int id PK
+        int event_id FK "NOT NULL -> events.id"
+        varchar name "NOT NULL"
+        int price_kurus "NOT NULL"
+    }
+
+    EVENT_SEATS {
+        int id PK
+        int event_id FK "NOT NULL, UQ(event_id, seat_id)"
+        int seat_id FK "NOT NULL, UQ(event_id, seat_id)"
+        int category_id FK "NOT NULL -> ticket_categories.id"
+        int price_kurus "NOT NULL"
+        seatstatus status "NOT NULL (AVAILABLE | LOCKED | SOLD)"
+        int current_reservation_id FK "NULLABLE -> reservations.id"
+    }
+
+    GUEST_SESSIONS {
+        int id PK
+        varchar token_hash "UNIQUE, NOT NULL"
+        timestamptz expires_at "NOT NULL"
+    }
+
+    RESERVATIONS {
+        int id PK
+        int event_id FK "NOT NULL -> events.id"
+        int guest_session_id FK "NOT NULL -> guest_sessions.id"
+        varchar status "NOT NULL (ACTIVE | PURCHASED | RELEASED | EXPIRED)"
+        timestamptz created_at "NOT NULL"
+        timestamptz expires_at "NOT NULL"
+    }
+
+    RESERVATION_ITEMS {
+        int id PK
+        int reservation_id FK "NOT NULL -> reservations.id"
+        int event_seat_id FK "NOT NULL -> event_seats.id"
+        int unit_price_kurus "NOT NULL"
+    }
+
+    ORDERS {
+        int id PK
+        int reservation_id FK "UNIQUE, NOT NULL -> reservations.id"
+        int guest_session_id FK "NOT NULL -> guest_sessions.id"
+        int total_price_kurus "NOT NULL"
+        varchar currency "NOT NULL (TRY)"
+        timestamptz created_at "NOT NULL"
     }
 
     TICKETS {
         int id PK
+        int order_id FK "NOT NULL -> orders.id"
+        int event_id FK "NOT NULL, UQ(event_id, seat_id)"
+        int seat_id FK "NOT NULL, UQ(event_id, seat_id)"
         varchar ticket_code "UNIQUE INDEX (ix_tickets_ticket_code), NOT NULL"
-        int event_id FK "NOT NULL -> events.id, UQ(event_id, seat_id)"
-        int seat_id FK "NOT NULL -> seats.id, UQ(event_id, seat_id)"
-        varchar session_id "NOT NULL"
-        timestamptz created_at "NOT NULL, DEFAULT now()"
+        int unit_price_kurus "NOT NULL"
+        varchar status "NOT NULL (VALID | USED)"
+        timestamptz created_at "NOT NULL"
+    }
+
+    CHECK_INS {
+        int id PK
+        int ticket_id FK "UNIQUE, NOT NULL -> tickets.id"
+        timestamptz checked_in_at "NOT NULL"
+        varchar staff_label "NOT NULL"
+    }
+
+    EMAIL_DELIVERIES {
+        int id PK
+        int order_id FK "NOT NULL -> orders.id"
+        varchar recipient "NOT NULL"
+        varchar purpose "NOT NULL"
+        varchar status "NOT NULL (PENDING | SENT | FAILED)"
+        int attempts "NOT NULL"
+        timestamptz next_attempt_at "NULLABLE"
+        text last_error "NULLABLE"
+        timestamptz sent_at "NULLABLE"
+    }
+
+    IDEMPOTENCY_RECORDS {
+        int id PK
+        varchar owner_key "NOT NULL, UQ(owner_key, key)"
+        varchar key "NOT NULL, UQ(owner_key, key)"
+        varchar request_hash "NOT NULL"
+        int order_id FK "NOT NULL -> orders.id"
+        timestamptz created_at "NOT NULL"
     }
 ```
-
-## Kısıt, İndeks ve Varsayılan Değer Özeti
-
-| Tablo | Kısıt / İndeks Adı | Kapsam | Açıklama |
-|---|---|---|---|
-| `halls` | `halls_pkey` (PK), `ix_halls_id` | `id` | Salon birincil anahtarı |
-| `seats` | `seats_pkey` (PK), `seats_hall_id_fkey` (FK) | `id`, `hall_id -> halls(id)` | `status` sütunu veritabanında `NOT NULL` olup varsayılan değer (`SeatStatus.AVAILABLE`) SQLAlchemy ORM katmanında atanır |
-| `seat_locks` | `seat_locks_seat_id_key` (UNIQUE) | `seat_id` | Aynı koltuk için aynı anda yalnızca tek aktif kilit bulunması |
-| `events` | `events_pkey` (PK), `events_hall_id_fkey` (FK) | `id`, `hall_id -> halls(id)` | Etkinliğin düzenlendiği salon ve saat dilimi duyarlı başlangıç zamanı (`starts_at`) |
-| `tickets` | `ix_tickets_ticket_code` (UNIQUE INDEX) | `ticket_code` | Hem ORM (`unique=True, index=True`) hem SQL şema dosyalarında tek ve tekrarsız unique index olarak tanımlanmıştır |
-| `tickets` | `uq_tickets_event_seat` (UNIQUE CONSTRAINT) | `(event_id, seat_id)` | Aynı etkinlik ve aynı koltuk için birden fazla bilet kesilmesini veritabanı seviyesinde kesin olarak engeller |

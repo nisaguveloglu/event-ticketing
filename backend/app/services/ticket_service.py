@@ -5,8 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.event import Event
-from app.models.seat import Seat
-from app.models.ticket import Ticket
+from app.models.event_seat import EventSeat
+from app.models.order import Order
+from app.models.reservation_item import ReservationItem
+from app.models.seat import Seat, SeatStatus
+from app.models.ticket import Ticket, TicketStatus
 from app.schemas.ticket import TicketResponse
 
 MAX_TICKET_CODE_RETRIES = 5
@@ -80,19 +83,20 @@ def _is_ticket_code_collision_error(exc: IntegrityError) -> bool:
     )
 
 
-def create_ticket_for_purchase(
+def _insert_ticket_with_retry(
     db: Session,
-    seat: Seat,
+    event_id: int,
+    seat_id: int,
+    unit_price_kurus: int,
     session_id: str,
+    order_id: int | None = None,
     max_retries: int = MAX_TICKET_CODE_RETRIES,
 ) -> Ticket:
-    event = resolve_event_for_seat(db=db, seat=seat)
-
     existing_ticket = (
         db.query(Ticket)
         .filter(
-            Ticket.event_id == event.id,
-            Ticket.seat_id == seat.id,
+            Ticket.event_id == event_id,
+            Ticket.seat_id == seat_id,
         )
         .first()
     )
@@ -107,9 +111,12 @@ def create_ticket_for_purchase(
         try:
             with db.begin_nested():
                 ticket = Ticket(
+                    order_id=order_id,
                     ticket_code=candidate_code,
-                    event_id=event.id,
-                    seat_id=seat.id,
+                    event_id=event_id,
+                    seat_id=seat_id,
+                    unit_price_kurus=unit_price_kurus,
+                    status=TicketStatus.VALID.value,
                     session_id=session_id,
                 )
                 db.add(ticket)
@@ -131,6 +138,106 @@ def create_ticket_for_purchase(
     )
 
 
+def create_ticket_for_order_item(
+    db: Session,
+    order: Order,
+    event_seat: EventSeat,
+    unit_price_kurus: int | None = None,
+    session_id: str = "guest",
+    max_retries: int = MAX_TICKET_CODE_RETRIES,
+) -> Ticket:
+    seat = event_seat.seat or db.query(Seat).filter(Seat.id == event_seat.seat_id).first()
+    event = event_seat.event or db.query(Event).filter(Event.id == event_seat.event_id).first()
+
+    if seat is None or event is None or seat.hall_id != event.hall_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Seat does not belong to the event's hall",
+        )
+
+    effective_price = (
+        unit_price_kurus if unit_price_kurus is not None else event_seat.price_kurus
+    )
+    event_seat.status = SeatStatus.SOLD
+
+    return _insert_ticket_with_retry(
+        db=db,
+        event_id=event_seat.event_id,
+        seat_id=event_seat.seat_id,
+        unit_price_kurus=effective_price,
+        session_id=session_id,
+        order_id=order.id,
+        max_retries=max_retries,
+    )
+
+
+def create_tickets_for_order(
+    db: Session,
+    order: Order,
+    reservation_items: list[ReservationItem],
+    session_id: str = "guest",
+    max_retries: int = MAX_TICKET_CODE_RETRIES,
+) -> list[Ticket]:
+    if not reservation_items:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Order must contain at least one reservation item",
+        )
+
+    created_tickets: list[Ticket] = []
+    for item in reservation_items:
+        ev_seat = (
+            item.event_seat
+            or db.query(EventSeat).filter(EventSeat.id == item.event_seat_id).first()
+        )
+        if ev_seat is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="EventSeat not found for reservation item",
+            )
+        ticket = create_ticket_for_order_item(
+            db=db,
+            order=order,
+            event_seat=ev_seat,
+            unit_price_kurus=item.unit_price_kurus,
+            session_id=session_id,
+            max_retries=max_retries,
+        )
+        created_tickets.append(ticket)
+
+    return created_tickets
+
+
+def create_ticket_for_purchase(
+    db: Session,
+    seat: Seat,
+    session_id: str,
+    max_retries: int = MAX_TICKET_CODE_RETRIES,
+) -> Ticket:
+    event = resolve_event_for_seat(db=db, seat=seat)
+    ev_seat = (
+        db.query(EventSeat)
+        .filter(
+            EventSeat.event_id == event.id,
+            EventSeat.seat_id == seat.id,
+        )
+        .first()
+    )
+    unit_price = ev_seat.price_kurus if ev_seat is not None else 0
+    if ev_seat is not None:
+        ev_seat.status = SeatStatus.SOLD
+
+    return _insert_ticket_with_retry(
+        db=db,
+        event_id=event.id,
+        seat_id=seat.id,
+        unit_price_kurus=unit_price,
+        session_id=session_id,
+        order_id=None,
+        max_retries=max_retries,
+    )
+
+
 def get_ticket_by_code(db: Session, ticket_code: str) -> TicketResponse:
     ticket = (
         db.query(Ticket)
@@ -148,8 +255,22 @@ def get_ticket_by_code(db: Session, ticket_code: str) -> TicketResponse:
     seat = ticket.seat
     hall = event.hall
 
+    ev_seat = (
+        db.query(EventSeat)
+        .filter(
+            EventSeat.event_id == ticket.event_id,
+            EventSeat.seat_id == ticket.seat_id,
+        )
+        .first()
+    )
+    category_name = ev_seat.category.name if (ev_seat and ev_seat.category) else None
+    effective_seat_status = ev_seat.status if ev_seat is not None else seat.status
+    row_lbl = seat.row_label or seat.row
+    used_at = ticket.check_in.checked_in_at if ticket.check_in is not None else None
+
     return TicketResponse(
         id=ticket.id,
+        order_id=ticket.order_id,
         ticket_code=ticket.ticket_code,
         event_id=event.id,
         event_name=event.name,
@@ -157,8 +278,13 @@ def get_ticket_by_code(db: Session, ticket_code: str) -> TicketResponse:
         hall_id=hall.id,
         hall_name=hall.name,
         seat_id=seat.id,
-        seat_row=seat.row,
+        seat_row=row_lbl,
         seat_number=seat.number,
-        seat_status=seat.status,
+        seat_label=f"{row_lbl}{seat.number}",
+        category_name=category_name,
+        unit_price_kurus=ticket.unit_price_kurus,
+        status=ticket.status,
+        used_at=used_at,
+        seat_status=effective_seat_status,
         created_at=ticket.created_at,
     )

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -30,4 +30,28 @@ class Event(Base):
         nullable=False,
     )
 
+    sales_open: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+        nullable=False,
+    )
+
+    version: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default="1",
+        nullable=False,
+    )
+
     hall = relationship("Hall")
+    categories = relationship(
+        "TicketCategory",
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
+    event_seats = relationship(
+        "EventSeat",
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
